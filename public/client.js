@@ -13,6 +13,15 @@ const lobbyError = document.getElementById('lobby-error');
 const displayRoom = document.getElementById('display-room');
 const overlayRoomCode = document.getElementById('overlay-room-code');
 const copyLinkBtn = document.getElementById('copy-link-btn');
+const resetBtn = document.getElementById('reset-btn');
+const connStatus = document.getElementById('conn-status');
+
+const resetBanner = document.getElementById('reset-banner');
+const resetBannerText = document.getElementById('reset-banner-text');
+const confirmResetBtn = document.getElementById('confirm-reset-btn');
+const declineResetBtn = document.getElementById('decline-reset-btn');
+const hintToast = document.getElementById('hint-toast');
+
 const gridEl = document.getElementById('grid');
 const wordListEl = document.getElementById('word-list');
 const displayCategory = document.getElementById('display-category');
@@ -30,10 +39,12 @@ const winnerSummary = document.getElementById('winner-summary');
 const nextCategorySelect = document.getElementById('next-category');
 const playAgainBtn = document.getElementById('play-again-btn');
 
-// Client state
+// Client state & persistent session token for auto-reconnect
+const playerToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
 let selectedSlot = 1;
 let selectedAvatar = '🦊';
 let mySlot = null;
+let sessionInfo = null;
 let currentState = null;
 
 // Drag state
@@ -77,13 +88,15 @@ joinBtn.addEventListener('click', () => {
   if (!roomCodeInput.value.trim()) {
     genRoomBtn.click();
   }
-  socket.emit('joinRoom', {
-    roomCode: roomCodeInput.value,
+  sessionInfo = {
+    roomCode: roomCodeInput.value.trim().toUpperCase(),
     slot: selectedSlot,
     name: playerNameInput.value,
     avatar: selectedAvatar,
-    category: categorySelect.value
-  });
+    category: categorySelect.value,
+    token: playerToken
+  };
+  socket.emit('joinRoom', sessionInfo);
 });
 
 copyLinkBtn.addEventListener('click', () => {
@@ -94,8 +107,52 @@ copyLinkBtn.addEventListener('click', () => {
   });
 });
 
+// Mutual-confirmation Reset buttons
+resetBtn.addEventListener('click', () => {
+  if (!currentState || !mySlot) return;
+  if (currentState.resetVotes?.[mySlot]) {
+    socket.emit('cancelReset');
+  } else {
+    socket.emit('requestReset');
+  }
+});
+
+confirmResetBtn.addEventListener('click', () => {
+  socket.emit('requestReset');
+});
+
+declineResetBtn.addEventListener('click', () => {
+  socket.emit('cancelReset');
+});
+
 playAgainBtn.addEventListener('click', () => {
   socket.emit('restartGame', { category: nextCategorySelect.value });
+});
+
+// Socket lifecycle & auto-rejoin
+socket.on('connect', () => {
+  connStatus.classList.add('hidden');
+  if (mySlot && sessionInfo) {
+    socket.emit('rejoinRoom', {
+      roomCode: sessionInfo.roomCode,
+      slot: sessionInfo.slot,
+      token: playerToken
+    });
+  }
+});
+
+socket.on('disconnect', () => {
+  if (mySlot) {
+    connStatus.classList.remove('hidden');
+  }
+});
+
+socket.on('rejoinFailed', () => {
+  mySlot = null;
+  sessionInfo = null;
+  gameScreen.classList.add('hidden');
+  lobbyScreen.classList.remove('hidden');
+  lobbyError.textContent = 'Session expired after disconnecting. Please rejoin the room.';
 });
 
 socket.on('joinError', (msg) => {
@@ -118,7 +175,14 @@ socket.on('invalidSelection', () => {
   setTimeout(() => gridEl.classList.remove('shake'), 250);
 });
 
-// Build crisp SVG illustrations (including accurate vector flags for Countries)
+socket.on('selectionHint', (msg) => {
+  hintToast.textContent = msg;
+  hintToast.classList.remove('hidden');
+  gridEl.classList.add('shake');
+  setTimeout(() => gridEl.classList.remove('shake'), 250);
+  setTimeout(() => hintToast.classList.add('hidden'), 2500);
+});
+
 function renderVisualSVG(visual) {
   if (!visual) {
     return `<span class="placeholder-icon">📖</span>`;
@@ -173,6 +237,29 @@ function showMeaningCard(item, players) {
   }
 }
 
+function renderResetUI(state) {
+  const votes = state.resetVotes || { 1: false, 2: false };
+  const otherSlot = mySlot === 1 ? 2 : 1;
+  const iVoted = Boolean(votes[mySlot]);
+  const otherVoted = Boolean(votes[otherSlot]);
+
+  if (iVoted) {
+    resetBtn.textContent = 'Cancel Reset (1/2)';
+    resetBtn.classList.add('pending');
+  } else {
+    resetBtn.textContent = 'Reset Game';
+    resetBtn.classList.remove('pending');
+  }
+
+  if (otherVoted && !iVoted) {
+    const requester = state.players[otherSlot];
+    resetBannerText.textContent = `${requester?.avatar || ''} ${requester?.name || 'Opponent'} wants to reset the game.`;
+    resetBanner.classList.remove('hidden');
+  } else {
+    resetBanner.classList.add('hidden');
+  }
+}
+
 function renderGame(state) {
   displayRoom.textContent = state.roomCode;
   overlayRoomCode.textContent = state.roomCode;
@@ -182,13 +269,12 @@ function renderGame(state) {
 
   updatePlayerCard(1, state.players[1]);
   updatePlayerCard(2, state.players[2]);
+  renderResetUI(state);
 
   waitingOverlay.classList.toggle('hidden', state.status !== 'waiting');
 
-  // Show latest found word picture & meaning
   showMeaningCard(state.lastFound, state.players);
 
-  // Build lookup map of found cells
   const cellOwnership = new Map();
   state.words.forEach((w) => {
     if (w.foundBy) {
@@ -201,7 +287,6 @@ function renderGame(state) {
     }
   });
 
-  // Render dynamic grid (10x10)
   gridEl.style.gridTemplateColumns = `repeat(${state.gridSize}, 1fr)`;
   gridEl.innerHTML = '';
   for (let r = 0; r < state.gridSize; r++) {
@@ -221,7 +306,6 @@ function renderGame(state) {
     }
   }
 
-  // Render right-side word list
   wordListEl.innerHTML = '';
   state.words.forEach((w) => {
     const li = document.createElement('li');
@@ -269,7 +353,8 @@ function updatePlayerCard(slot, player) {
 
   if (player) {
     avatarEl.textContent = player.avatar;
-    nameEl.textContent = player.name + (slot === mySlot ? ' (You)' : '');
+    const statusSuffix = player.connected === false ? ' (Reconnecting...)' : '';
+    nameEl.textContent = player.name + (slot === mySlot ? ' (You)' : '') + statusSuffix;
     scoreEl.textContent = player.score;
   } else {
     avatarEl.textContent = '❓';
@@ -372,16 +457,18 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', endDrag);
 
 gridEl.addEventListener('touchstart', (e) => {
+  e.preventDefault();
   const touch = e.touches[0];
   const cell = getCellFromPoint(touch.clientX, touch.clientY);
   if (cell) startDrag(cell);
-});
+}, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
   if (!isDragging) return;
+  e.preventDefault();
   const touch = e.touches[0];
   const cell = getCellFromPoint(touch.clientX, touch.clientY);
   if (cell) moveDrag(cell);
-});
+}, { passive: false });
 
 window.addEventListener('touchend', endDrag);
