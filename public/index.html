@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word Search Duel</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- LOBBY SCREEN -->
+  <div id="lobby-screen" class="screen">
+    <div class="lobby-card">
+      <h1>Word Search Duel</h1>
+      <p class="subtitle">Level 1 • 10×10 Grid • 10 Words</p>
+
+      <div class="form-group">
+        <label for="room-code">Room Code</label>
+        <div class="room-row">
+          <input id="room-code" type="text" maxlength="8" placeholder="e.g. ABCD" />
+          <button id="gen-room-btn" type="button" class="btn-secondary">Generate</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Select Player Slot</label>
+        <div class="slot-selector">
+          <button type="button" class="slot-btn active" data-slot="1">
+            <span class="dot p1-dot"></span> Player 1 (Blue)
+          </button>
+          <button type="button" class="slot-btn" data-slot="2">
+            <span class="dot p2-dot"></span> Player 2 (Orange)
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="player-name">Your Name</label>
+        <input id="player-name" type="text" maxlength="16" placeholder="Enter your name" />
+      </div>
+
+      <div class="form-group">
+        <label>Choose Avatar</label>
+        <div id="avatar-picker" class="avatar-grid">
+          <button type="button" class="avatar-btn active" data-avatar="🦊">🦊</button>
+          <button type="button" class="avatar-btn" data-avatar="🐼">🐼</button>
+          <button type="button" class="avatar-btn" data-avatar="🦁">🦁</button>
+          <button type="button" class="avatar-btn" data-avatar="🐸">🐸</button>
+          <button type="button" class="avatar-btn" data-avatar="🐙">🐙</button>
+          <button type="button" class="avatar-btn" data-avatar="🦄">🦄</button>
+          <button type="button" class="avatar-btn" data-avatar="🚀">🚀</button>
+          <button type="button" class="avatar-btn" data-avatar="🤖">🤖</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="category-select">Category (if creating a new room)</label>
+        <select id="category-select">
+          <option value="Animals">Animals</option>
+          <option value="Countries">Countries</option>
+          <option value="Technology">Technology</option>
+          <option value="Space">Space</option>
+          <option value="Food">Food</option>
+        </select>
+      </div>
+
+      <p id="lobby-error" class="error-msg"></p>
+      <button id="join-btn" type="button" class="btn-primary">Join / Start Game</button>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen hidden">
+    <header class="top-bar">
+      <div class="room-info">
+        <span class="badge">Room: <strong id="display-room"></strong></span>
+        <button id="copy-link-btn" type="button" class="btn-small">Copy Invite Link</button>
+      </div>
+
+      <div class="scoreboard">
+        <div id="p1-card" class="player-card p1">
+          <span class="avatar" id="p1-avatar">❓</span>
+          <div class="player-meta">
+            <span class="name" id="p1-name">Waiting...</span>
+            <span class="score">Score: <strong id="p1-score">0</strong></span>
+          </div>
+        </div>
+
+        <div class="vs-badge">VS</div>
+
+        <div id="p2-card" class="player-card p2">
+          <span class="avatar" id="p2-avatar">❓</span>
+          <div class="player-meta">
+            <span class="name" id="p2-name">Waiting...</span>
+            <span class="score">Score: <strong id="p2-score">0</strong></span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <div class="board-column">
+        <div class="board-wrapper">
+          <div id="grid" class="word-grid"></div>
+          <div id="waiting-overlay" class="overlay hidden">
+            <div class="overlay-box">
+              <h2>Waiting for Opponent...</h2>
+              <p>Share Room Code <strong id="overlay-room-code"></strong> or send the invite link to Player 2.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- WORD PICTURE & MEANING CARD -->
+        <section id="meaning-card" class="meaning-card">
+          <div id="meaning-picture" class="meaning-picture">
+            <span class="placeholder-icon">📖</span>
+          </div>
+          <div class="meaning-content">
+            <div class="meaning-header">
+              <h3 id="meaning-word">Find a word to learn its meaning!</h3>
+              <span id="meaning-finder" class="finder-pill hidden"></span>
+            </div>
+            <p id="meaning-text">When any player finds a word on the 10×10 board, its picture and definition will appear here.</p>
+          </div>
+        </section>
+      </div>
+
+      <aside class="word-panel">
+        <div class="panel-header">
+          <span class="category-tag" id="display-category">Animals</span>
+          <span class="level-tag" id="level-label">Level 1 (10×10)</span>
+        </div>
+        <h3>Find These 10 Words</h3>
+        <p class="hint">Drag from first to last letter. Click any found word to review its meaning.</p>
+        <ul id="word-list" class="word-list"></ul>
+      </aside>
+    </main>
+  </div>
+
+  <!-- STAGE RESULT MODAL -->
+  <div id="result-modal" class="overlay hidden">
+    <div class="overlay-box result-box">
+      <h2 id="winner-title">Stage Complete!</h2>
+      <p id="winner-summary"></p>
+
+      <div class="form-group">
+        <label for="next-category">Next Stage Category</label>
+        <select id="next-category">
+          <option value="Animals">Animals</option>
+          <option value="Countries">Countries</option>
+          <option value="Technology">Technology</option>
+          <option value="Space">Space</option>
+          <option value="Food">Food</option>
+        </select>
+      </div>
+
+      <button id="play-again-btn" type="button" class="btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
