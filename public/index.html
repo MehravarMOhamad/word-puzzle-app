@@ -74,6 +74,8 @@
       <div class="room-info">
         <span class="badge">Room: <strong id="display-room"></strong></span>
         <button id="copy-link-btn" type="button" class="btn-small">Copy Invite Link</button>
+        <button id="reset-btn" type="button" class="btn-small btn-reset">Reset Game</button>
+        <span id="conn-status" class="conn-badge hidden">Reconnecting...</span>
       </div>
 
       <div class="scoreboard">
@@ -96,6 +98,17 @@
         </div>
       </div>
     </header>
+
+    <!-- MUTUAL RESET CONFIRMATION BANNER -->
+    <div id="reset-banner" class="reset-banner hidden">
+      <span id="reset-banner-text"></span>
+      <div class="reset-actions">
+        <button id="confirm-reset-btn" type="button" class="btn-confirm">Confirm Reset</button>
+        <button id="decline-reset-btn" type="button" class="btn-decline">Decline</button>
+      </div>
+    </div>
+
+    <div id="hint-toast" class="hint-toast hidden"></div>
 
     <main class="game-layout">
       <div class="board-column">
