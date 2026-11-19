@@ -88,7 +88,6 @@ const CATEGORIES = {
   ]
 };
 
-// Horizontal (L->R), Vertical (T->B), Diagonal Down-Right, Diagonal Up-Right
 const DIRECTIONS = [
   { dr: 0, dc: 1 },
   { dr: 1, dc: 0 },
@@ -97,6 +96,7 @@ const DIRECTIONS = [
 ];
 
 const rooms = new Map();
+const disconnectTimers = new Map();
 
 function shuffle(arr) {
   const copy = [...arr];
@@ -159,8 +159,6 @@ function generatePuzzle(category, levelNum = 1) {
             word,
             meaning: item.meaning,
             visual: item.visual,
-            start: { r: rStart, c: cStart },
-            end: { r: rEnd, c: cEnd },
             cells,
             foundBy: null
           });
@@ -193,6 +191,43 @@ function generatePuzzle(category, levelNum = 1) {
   throw new Error('Could not generate puzzle grid');
 }
 
+// Extract straight line of cells from start to end on the grid
+function extractLine(grid, start, end) {
+  const size = grid.length;
+  if (
+    !start || !end ||
+    start.r < 0 || start.r >= size || start.c < 0 || start.c >= size ||
+    end.r < 0 || end.r >= size || end.c < 0 || end.c >= size
+  ) {
+    return null;
+  }
+
+  const dr = end.r - start.r;
+  const dc = end.c - start.c;
+
+  // Must be horizontal, vertical, or 45-degree diagonal
+  if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) {
+    return null;
+  }
+
+  const steps = Math.max(Math.abs(dr), Math.abs(dc));
+  if (steps === 0) return null;
+
+  const stepR = dr === 0 ? 0 : dr / Math.abs(dr);
+  const stepC = dc === 0 ? 0 : dc / Math.abs(dc);
+
+  const cells = [];
+  let text = '';
+  for (let i = 0; i <= steps; i++) {
+    const r = start.r + stepR * i;
+    const c = start.c + stepC * i;
+    cells.push({ r, c });
+    text += grid[r][c];
+  }
+
+  return { text, cells };
+}
+
 function createRoom(roomCode, category) {
   const puzzle = generatePuzzle(category, 1);
   return {
@@ -205,8 +240,27 @@ function createRoom(roomCode, category) {
     players: { 1: null, 2: null },
     status: 'waiting',
     winner: null,
-    lastFound: null
+    lastFound: null,
+    resetVotes: { 1: false, 2: false }
   };
+}
+
+function resetRoomPuzzle(room, newCategory) {
+  const chosenCategory = CATEGORIES[newCategory] ? newCategory : room.category;
+  const puzzle = generatePuzzle(chosenCategory, 1);
+
+  room.category = chosenCategory;
+  room.gridSize = puzzle.gridSize;
+  room.grid = puzzle.grid;
+  room.words = puzzle.words;
+  room.winner = null;
+  room.lastFound = null;
+  room.resetVotes = { 1: false, 2: false };
+
+  if (room.players[1]) room.players[1].score = 0;
+  if (room.players[2]) room.players[2].score = 0;
+
+  room.status = room.players[1] && room.players[2] ? 'playing' : 'waiting';
 }
 
 function getPublicRoomState(room) {
@@ -223,15 +277,31 @@ function getPublicRoomState(room) {
       meaning: w.foundBy ? w.meaning : null,
       visual: w.foundBy ? w.visual : null
     })),
-    players: room.players,
+    players: {
+      1: room.players[1]
+        ? { slot: 1, name: room.players[1].name, avatar: room.players[1].avatar, score: room.players[1].score, connected: room.players[1].connected }
+        : null,
+      2: room.players[2]
+        ? { slot: 2, name: room.players[2].name, avatar: room.players[2].avatar, score: room.players[2].score, connected: room.players[2].connected }
+        : null
+    },
     status: room.status,
     winner: room.winner,
-    lastFound: room.lastFound
+    lastFound: room.lastFound,
+    resetVotes: room.resetVotes
   };
 }
 
+function clearDisconnectTimer(code, slot) {
+  const key = `${code}:${slot}`;
+  if (disconnectTimers.has(key)) {
+    clearTimeout(disconnectTimers.get(key));
+    disconnectTimers.delete(key);
+  }
+}
+
 io.on('connection', (socket) => {
-  socket.on('joinRoom', ({ roomCode, slot, name, avatar, category }) => {
+  socket.on('joinRoom', ({ roomCode, slot, name, avatar, category, token }) => {
     const code = (roomCode || '').trim().toUpperCase();
     const playerSlot = Number(slot);
     const playerName = (name || '').trim().slice(0, 16);
@@ -248,17 +318,22 @@ io.on('connection', (socket) => {
       rooms.set(code, room);
     }
 
-    if (room.players[playerSlot]) {
+    const existing = room.players[playerSlot];
+    if (existing && existing.token !== token) {
       socket.emit('joinError', `Player ${playerSlot} is already taken in room ${code}. Choose the other slot!`);
       return;
     }
 
+    clearDisconnectTimer(code, playerSlot);
+
     room.players[playerSlot] = {
       id: socket.id,
+      token: token || socket.id,
       slot: playerSlot,
       name: playerName,
       avatar: avatar || (playerSlot === 1 ? '🦊' : '🐼'),
-      score: 0
+      score: existing ? existing.score : 0,
+      connected: true
     };
 
     socket.join(code);
@@ -266,10 +341,36 @@ io.on('connection', (socket) => {
     socket.data.slot = playerSlot;
 
     if (room.players[1] && room.players[2] && room.status === 'waiting') {
-      room.status = 'playing';
+      room.status = room.words.every((w) => w.foundBy !== null) ? 'finished' : 'playing';
     }
 
-    socket.emit('joinedSuccess', { slot: playerSlot, categories: Object.keys(CATEGORIES) });
+    socket.emit('joinedSuccess', { slot: playerSlot });
+    io.to(code).emit('roomState', getPublicRoomState(room));
+  });
+
+  // Auto-rejoin after brief connection drops without losing score or slot
+  socket.on('rejoinRoom', ({ roomCode, slot, token }) => {
+    const code = (roomCode || '').trim().toUpperCase();
+    const playerSlot = Number(slot);
+    const room = rooms.get(code);
+
+    if (!room || !room.players[playerSlot] || room.players[playerSlot].token !== token) {
+      socket.emit('rejoinFailed');
+      return;
+    }
+
+    clearDisconnectTimer(code, playerSlot);
+    room.players[playerSlot].id = socket.id;
+    room.players[playerSlot].connected = true;
+
+    socket.join(code);
+    socket.data.roomCode = code;
+    socket.data.slot = playerSlot;
+
+    if (room.players[1] && room.players[2] && room.status === 'waiting') {
+      room.status = room.words.every((w) => w.foundBy !== null) ? 'finished' : 'playing';
+    }
+
     io.to(code).emit('roomState', getPublicRoomState(room));
   });
 
@@ -280,21 +381,28 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room || room.status !== 'playing') return;
 
-    const matched = room.words.find(
-      (w) =>
-        w.foundBy === null &&
-        w.start.r === start.r &&
-        w.start.c === start.c &&
-        w.end.r === end.r &&
-        w.end.c === end.c
-    );
-
-    if (!matched) {
+    const line = extractLine(room.grid, start, end);
+    if (!line) {
       socket.emit('invalidSelection');
       return;
     }
 
+    const matched = room.words.find((w) => w.foundBy === null && w.word === line.text);
+
+    if (!matched) {
+      // Helpful hint if player dragged from last letter to first letter
+      const reversed = line.text.split('').reverse().join('');
+      const backwardsMatch = room.words.find((w) => w.foundBy === null && w.word === reversed);
+      if (backwardsMatch) {
+        socket.emit('selectionHint', 'Drag from the FIRST letter to the LAST letter!');
+      } else {
+        socket.emit('invalidSelection');
+      }
+      return;
+    }
+
     matched.foundBy = slot;
+    matched.cells = line.cells;
     room.players[slot].score += 1;
     room.lastFound = {
       word: matched.word,
@@ -316,6 +424,34 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
   });
 
+  // Mutual-confirmation Reset (requires BOTH players to confirm)
+  socket.on('requestReset', () => {
+    const { roomCode, slot } = socket.data;
+    if (!roomCode || !slot) return;
+
+    const room = rooms.get(roomCode);
+    if (!room || !room.players[1] || !room.players[2]) return;
+
+    room.resetVotes[slot] = true;
+
+    if (room.resetVotes[1] && room.resetVotes[2]) {
+      resetRoomPuzzle(room, room.category);
+    }
+
+    io.to(roomCode).emit('roomState', getPublicRoomState(room));
+  });
+
+  socket.on('cancelReset', () => {
+    const { roomCode } = socket.data;
+    if (!roomCode) return;
+
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.resetVotes = { 1: false, 2: false };
+    io.to(roomCode).emit('roomState', getPublicRoomState(room));
+  });
+
   socket.on('restartGame', ({ category }) => {
     const { roomCode } = socket.data;
     if (!roomCode) return;
@@ -323,21 +459,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    const chosenCategory = CATEGORIES[category] ? category : room.category;
-    const puzzle = generatePuzzle(chosenCategory, 1);
-
-    room.category = chosenCategory;
-    room.gridSize = puzzle.gridSize;
-    room.grid = puzzle.grid;
-    room.words = puzzle.words;
-    room.winner = null;
-    room.lastFound = null;
-
-    if (room.players[1]) room.players[1].score = 0;
-    if (room.players[2]) room.players[2].score = 0;
-
-    room.status = room.players[1] && room.players[2] ? 'playing' : 'waiting';
-
+    resetRoomPuzzle(room, category);
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
   });
 
@@ -348,18 +470,35 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    if (room.players[slot] && room.players[slot].id === socket.id) {
-      room.players[slot] = null;
-      if (room.status === 'playing') {
-        room.status = 'waiting';
-      }
-    }
+    const player = room.players[slot];
+    if (!player || player.id !== socket.id) return;
 
-    if (!room.players[1] && !room.players[2]) {
-      rooms.delete(roomCode);
-    } else {
-      io.to(roomCode).emit('roomState', getPublicRoomState(room));
-    }
+    player.connected = false;
+    io.to(roomCode).emit('roomState', getPublicRoomState(room));
+
+    // Wait 60 seconds before removing player so temporary network blips can auto-rejoin
+    clearDisconnectTimer(roomCode, slot);
+    const timer = setTimeout(() => {
+      const currentRoom = rooms.get(roomCode);
+      if (!currentRoom) return;
+
+      const p = currentRoom.players[slot];
+      if (p && !p.connected) {
+        currentRoom.players[slot] = null;
+        currentRoom.resetVotes = { 1: false, 2: false };
+        if (currentRoom.status === 'playing') {
+          currentRoom.status = 'waiting';
+        }
+        if (!currentRoom.players[1] && !currentRoom.players[2]) {
+          rooms.delete(roomCode);
+        } else {
+          io.to(roomCode).emit('roomState', getPublicRoomState(currentRoom));
+        }
+      }
+      disconnectTimers.delete(`${roomCode}:${slot}`);
+    }, 60000);
+
+    disconnectTimers.set(`${roomCode}:${slot}`, timer);
   });
 });
 
