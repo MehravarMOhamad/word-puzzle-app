@@ -14,12 +14,21 @@ const displayRoom = document.getElementById('display-room');
 const overlayRoomCode = document.getElementById('overlay-room-code');
 const copyLinkBtn = document.getElementById('copy-link-btn');
 const resetBtn = document.getElementById('reset-btn');
+const langEnBtn = document.getElementById('lang-en-btn');
+const langFaBtn = document.getElementById('lang-fa-btn');
+const soundBtn = document.getElementById('sound-btn');
 const connStatus = document.getElementById('conn-status');
 
 const resetBanner = document.getElementById('reset-banner');
 const resetBannerText = document.getElementById('reset-banner-text');
 const confirmResetBtn = document.getElementById('confirm-reset-btn');
 const declineResetBtn = document.getElementById('decline-reset-btn');
+
+const langBanner = document.getElementById('lang-banner');
+const langBannerText = document.getElementById('lang-banner-text');
+const confirmLangBtn = document.getElementById('confirm-lang-btn');
+const declineLangBtn = document.getElementById('decline-lang-btn');
+
 const hintToast = document.getElementById('hint-toast');
 
 const gridEl = document.getElementById('grid');
@@ -28,9 +37,10 @@ const displayCategory = document.getElementById('display-category');
 const levelLabel = document.getElementById('level-label');
 const waitingOverlay = document.getElementById('waiting-overlay');
 
-const meaningPicture = document.getElementById('meaning-picture');
 const meaningWord = document.getElementById('meaning-word');
+const speakAgainBtn = document.getElementById('speak-again-btn');
 const meaningFinder = document.getElementById('meaning-finder');
+const meaningCounterpart = document.getElementById('meaning-counterpart');
 const meaningText = document.getElementById('meaning-text');
 
 const resultModal = document.getElementById('result-modal');
@@ -39,7 +49,7 @@ const winnerSummary = document.getElementById('winner-summary');
 const nextCategorySelect = document.getElementById('next-category');
 const playAgainBtn = document.getElementById('play-again-btn');
 
-// Client state & persistent session token for auto-reconnect
+// Client state & session token for auto-reconnect
 const playerToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
 let selectedSlot = 1;
 let selectedAvatar = '🦊';
@@ -47,10 +57,56 @@ let mySlot = null;
 let sessionInfo = null;
 let currentState = null;
 
+// Per-player pronunciation setting (stored locally per browser)
+let soundEnabled = localStorage.getItem('wordPuzzleSound') !== 'off';
+let lastSpokenSeq = 0;
+let activeCardWord = null;
+
 // Drag state
 let isDragging = false;
 let dragStart = null;
 let dragEnd = null;
+
+function updateSoundButton() {
+  if (soundEnabled) {
+    soundBtn.textContent = '🔊 Voice: ON';
+    soundBtn.classList.remove('muted');
+  } else {
+    soundBtn.textContent = '🔇 Voice: OFF';
+    soundBtn.classList.add('muted');
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+}
+
+updateSoundButton();
+
+soundBtn.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('wordPuzzleSound', soundEnabled ? 'on' : 'off');
+  updateSoundButton();
+});
+
+function pronounceWord(word, lang) {
+  if (!word || !('speechSynthesis' in window)) return;
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(word);
+  const targetLang = lang === 'fa' ? 'fa-IR' : 'en-US';
+  utterance.lang = targetLang;
+  utterance.rate = 0.88;
+
+  const voices = window.speechSynthesis.getVoices();
+  const matchingVoice = voices.find((v) =>
+    v.lang.toLowerCase().startsWith(lang === 'fa' ? 'fa' : 'en')
+  );
+  if (matchingVoice) {
+    utterance.voice = matchingVoice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
 
 // Pre-fill room code from URL query (?room=ABCD)
 const urlParams = new URLSearchParams(window.location.search);
@@ -107,7 +163,7 @@ copyLinkBtn.addEventListener('click', () => {
   });
 });
 
-// Mutual-confirmation Reset buttons
+// Mutual Reset Buttons
 resetBtn.addEventListener('click', () => {
   if (!currentState || !mySlot) return;
   if (currentState.resetVotes?.[mySlot]) {
@@ -117,12 +173,33 @@ resetBtn.addEventListener('click', () => {
   }
 });
 
-confirmResetBtn.addEventListener('click', () => {
-  socket.emit('requestReset');
-});
+confirmResetBtn.addEventListener('click', () => socket.emit('requestReset'));
+declineResetBtn.addEventListener('click', () => socket.emit('cancelReset'));
 
-declineResetBtn.addEventListener('click', () => {
-  socket.emit('cancelReset');
+// Mutual Language Toggle Switch
+function handleLangClick(targetLang) {
+  if (!currentState || !mySlot) return;
+  if (currentState.pendingLang === targetLang && currentState.langVotes?.[mySlot]) {
+    socket.emit('cancelLangChange');
+    return;
+  }
+  if (currentState.tableLang === targetLang && !currentState.pendingLang) return;
+  socket.emit('requestLangChange', { targetLang });
+}
+
+langEnBtn.addEventListener('click', () => handleLangClick('en'));
+langFaBtn.addEventListener('click', () => handleLangClick('fa'));
+confirmLangBtn.addEventListener('click', () => {
+  if (currentState?.pendingLang) {
+    socket.emit('requestLangChange', { targetLang: currentState.pendingLang });
+  }
+});
+declineLangBtn.addEventListener('click', () => socket.emit('cancelLangChange'));
+
+speakAgainBtn.addEventListener('click', () => {
+  if (activeCardWord && currentState) {
+    pronounceWord(activeCardWord, currentState.tableLang);
+  }
 });
 
 playAgainBtn.addEventListener('click', () => {
@@ -168,6 +245,14 @@ socket.on('joinedSuccess', ({ slot }) => {
 socket.on('roomState', (state) => {
   currentState = state;
   renderGame(state);
+
+  // Pronounce newly found word once (if this player has voice ON)
+  if (state.lastFound && state.lastFound.seq > lastSpokenSeq) {
+    lastSpokenSeq = state.lastFound.seq;
+    if (soundEnabled) {
+      pronounceWord(state.lastFound.word, state.tableLang);
+    }
+  }
 });
 
 socket.on('invalidSelection', () => {
@@ -183,50 +268,32 @@ socket.on('selectionHint', (msg) => {
   setTimeout(() => hintToast.classList.add('hidden'), 2500);
 });
 
-function renderVisualSVG(visual) {
-  if (!visual) {
-    return `<span class="placeholder-icon">📖</span>`;
-  }
-
-  if (visual.type === 'flag') {
-    const flags = {
-      JP: `<svg viewBox="0 0 90 60"><rect width="90" height="60" fill="#ffffff"/><circle cx="45" cy="30" r="16" fill="#bc002d"/></svg>`,
-      DE: `<svg viewBox="0 0 90 60"><rect width="90" height="20" y="0" fill="#000000"/><rect width="90" height="20" y="20" fill="#dd0000"/><rect width="90" height="20" y="40" fill="#ffce00"/></svg>`,
-      FR: `<svg viewBox="0 0 90 60"><rect width="30" height="60" x="0" fill="#0055a4"/><rect width="30" height="60" x="30" fill="#ffffff"/><rect width="30" height="60" x="60" fill="#ef4135"/></svg>`,
-      IT: `<svg viewBox="0 0 90 60"><rect width="30" height="60" x="0" fill="#009246"/><rect width="30" height="60" x="30" fill="#ffffff"/><rect width="30" height="60" x="60" fill="#ce2b37"/></svg>`,
-      BE: `<svg viewBox="0 0 90 60"><rect width="30" height="60" x="0" fill="#000000"/><rect width="30" height="60" x="30" fill="#fdda24"/><rect width="30" height="60" x="60" fill="#ef3340"/></svg>`,
-      PL: `<svg viewBox="0 0 90 60"><rect width="90" height="30" y="0" fill="#ffffff"/><rect width="90" height="30" y="30" fill="#dc143c"/></svg>`,
-      SE: `<svg viewBox="0 0 90 60"><rect width="90" height="60" fill="#006aa7"/><rect width="12" height="60" x="25" fill="#fecc00"/><rect width="90" height="12" y="24" fill="#fecc00"/></svg>`,
-      NO: `<svg viewBox="0 0 90 60"><rect width="90" height="60" fill="#ba0c2f"/><rect width="14" height="60" x="24" fill="#ffffff"/><rect width="90" height="14" y="23" fill="#ffffff"/><rect width="8" height="60" x="27" fill="#00205b"/><rect width="90" height="8" y="26" fill="#00205b"/></svg>`,
-      IS: `<svg viewBox="0 0 90 60"><rect width="90" height="60" fill="#02529c"/><rect width="14" height="60" x="24" fill="#ffffff"/><rect width="90" height="14" y="23" fill="#ffffff"/><rect width="8" height="60" x="27" fill="#dc1e35"/><rect width="90" height="8" y="26" fill="#dc1e35"/></svg>`,
-      BR: `<svg viewBox="0 0 90 60"><rect width="90" height="60" fill="#009c3b"/><polygon points="45,8 80,30 45,52 10,30" fill="#ffdf00"/><circle cx="45" cy="30" r="12" fill="#002776"/></svg>`,
-      CA: `<svg viewBox="0 0 90 60"><rect width="22" height="60" x="0" fill="#d80621"/><rect width="46" height="60" x="22" fill="#ffffff"/><rect width="22" height="60" x="68" fill="#d80621"/><polygon points="45,14 49,25 58,23 52,32 58,37 47,37 46,46 44,46 43,37 32,37 38,32 32,23 41,25" fill="#d80621"/></svg>`,
-      MX: `<svg viewBox="0 0 90 60"><rect width="30" height="60" x="0" fill="#006847"/><rect width="30" height="60" x="30" fill="#ffffff"/><rect width="30" height="60" x="60" fill="#ce1126"/><circle cx="45" cy="30" r="7" fill="#8b5a2b"/></svg>`
-    };
-    return flags[visual.code] || `<span class="placeholder-icon">🏳️</span>`;
-  }
-
-  return `
-    <svg viewBox="0 0 100 100">
-      <rect width="100" height="100" fill="${visual.bg || '#f1f5f9'}"/>
-      <circle cx="50" cy="50" r="36" fill="rgba(255,255,255,0.25)"/>
-      <text x="50" y="54" text-anchor="middle" dominant-baseline="central" font-size="52">${visual.icon}</text>
-    </svg>
-  `;
-}
-
-function showMeaningCard(item, players) {
+function showMeaningCard(item, players, tableLang) {
   if (!item) {
-    meaningPicture.innerHTML = `<span class="placeholder-icon">📖</span>`;
+    activeCardWord = null;
+    speakAgainBtn.classList.add('hidden');
     meaningWord.textContent = 'Find a word to learn its meaning!';
+    meaningWord.className = '';
     meaningFinder.classList.add('hidden');
-    meaningText.textContent = 'When any player finds a word on the 10×10 board, its picture and definition will appear here.';
+    meaningCounterpart.classList.add('hidden');
+    meaningText.className = 'meaning-text ltr';
+    meaningText.textContent = 'When any player finds a word on the 10×10 board, its meaning will appear here.';
     return;
   }
 
-  meaningPicture.innerHTML = renderVisualSVG(item.visual);
+  activeCardWord = item.word;
+  speakAgainBtn.classList.remove('hidden');
+
   meaningWord.textContent = item.word;
+  meaningWord.className = tableLang === 'fa' ? 'rtl' : 'ltr';
+
+  const descIsRtl = tableLang === 'en'; // English table -> Farsi counterpart & meaning
+  meaningCounterpart.classList.remove('hidden');
+  meaningCounterpart.textContent = item.counterpart;
+  meaningCounterpart.className = `meaning-counterpart ${descIsRtl ? 'rtl' : 'ltr'}`;
+
   meaningText.textContent = item.meaning;
+  meaningText.className = `meaning-text ${descIsRtl ? 'rtl' : 'ltr'}`;
 
   const finder = players[item.foundBy];
   if (finder) {
@@ -260,6 +327,34 @@ function renderResetUI(state) {
   }
 }
 
+function renderLangUI(state) {
+  langEnBtn.classList.remove('active', 'pending');
+  langFaBtn.classList.remove('active', 'pending');
+
+  if (state.tableLang === 'en') langEnBtn.classList.add('active');
+  else langFaBtn.classList.add('active');
+
+  if (state.pendingLang === 'en') langEnBtn.classList.add('pending');
+  if (state.pendingLang === 'fa') langFaBtn.classList.add('pending');
+
+  const votes = state.langVotes || { 1: false, 2: false };
+  const otherSlot = mySlot === 1 ? 2 : 1;
+  const iVoted = Boolean(votes[mySlot]);
+  const otherVoted = Boolean(votes[otherSlot]);
+
+  if (state.pendingLang && otherVoted && !iVoted) {
+    const requester = state.players[otherSlot];
+    const targetLabel =
+      state.pendingLang === 'fa'
+        ? 'Farsi Table (معنی انگلیسی)'
+        : 'English Table (معنی فارسی)';
+    langBannerText.textContent = `${requester?.avatar || ''} ${requester?.name || 'Opponent'} wants to switch to: ${targetLabel}`;
+    langBanner.classList.remove('hidden');
+  } else {
+    langBanner.classList.add('hidden');
+  }
+}
+
 function renderGame(state) {
   displayRoom.textContent = state.roomCode;
   overlayRoomCode.textContent = state.roomCode;
@@ -270,10 +365,11 @@ function renderGame(state) {
   updatePlayerCard(1, state.players[1]);
   updatePlayerCard(2, state.players[2]);
   renderResetUI(state);
+  renderLangUI(state);
 
   waitingOverlay.classList.toggle('hidden', state.status !== 'waiting');
 
-  showMeaningCard(state.lastFound, state.players);
+  showMeaningCard(state.lastFound, state.players, state.tableLang);
 
   const cellOwnership = new Map();
   state.words.forEach((w) => {
@@ -306,14 +402,18 @@ function renderGame(state) {
     }
   }
 
+  wordListEl.className = `word-list ${state.tableLang === 'fa' ? 'rtl-list' : ''}`;
   wordListEl.innerHTML = '';
   state.words.forEach((w) => {
     const li = document.createElement('li');
     li.className = 'word-item';
     if (w.foundBy) {
       li.classList.add(`found-${w.foundBy}`);
-      li.title = 'Click to view picture and meaning';
-      li.addEventListener('click', () => showMeaningCard(w, state.players));
+      li.title = 'Click to view meaning & hear word';
+      li.addEventListener('click', () => {
+        showMeaningCard(w, state.players, state.tableLang);
+        if (soundEnabled) pronounceWord(w.word, state.tableLang);
+      });
     }
 
     const wordSpan = document.createElement('span');
