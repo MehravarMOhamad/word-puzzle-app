@@ -5,7 +5,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Tahoma, sans-serif;
   background: #f1f5f9;
   color: #1e293b;
   min-height: 100vh;
@@ -30,7 +30,7 @@ body {
   border-radius: 16px;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
   width: 100%;
-  max-width: 420px;
+  max-width: 430px;
 }
 
 .lobby-card h1 {
@@ -167,6 +167,47 @@ input, select {
   color: #92400e;
 }
 
+.btn-sound {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.btn-sound.muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* KID-FRIENDLY LANGUAGE PILL SWITCH */
+.lang-toggle {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 3px;
+  border-radius: 999px;
+  gap: 2px;
+}
+
+.lang-opt {
+  border: none;
+  background: transparent;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.lang-opt.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.lang-opt.pending {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
 .conn-badge {
   background: #fef08a;
   color: #854d0e;
@@ -185,7 +226,7 @@ input, select {
 
 /* GAME SCREEN */
 #game-screen {
-  max-width: 980px;
+  max-width: 1020px;
   margin: 0 auto;
   padding: 16px;
 }
@@ -240,8 +281,8 @@ input, select {
 .player-meta .name { font-weight: 700; }
 .vs-badge { font-weight: 800; color: #94a3b8; }
 
-/* RESET BANNER & HINT TOAST */
-.reset-banner {
+/* CONFIRMATION BANNERS & HINT TOAST */
+.confirm-banner {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -257,7 +298,13 @@ input, select {
   font-size: 0.92rem;
 }
 
-.reset-actions {
+.lang-banner {
+  background: #e0f2fe;
+  border-color: #0284c7;
+  color: #0c4a6e;
+}
+
+.banner-actions {
   display: flex;
   gap: 8px;
 }
@@ -326,6 +373,7 @@ input, select {
   gap: 5px;
   max-width: 520px;
   margin: 0 auto;
+  direction: ltr;
   user-select: none;
   touch-action: none;
 }
@@ -383,56 +431,44 @@ input, select {
   75% { transform: translateX(4px); }
 }
 
-/* WORD MEANING & PICTURE CARD */
+/* WORD MEANING CARD (DESCRIPTION ONLY) */
 .meaning-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
   background: #ffffff;
-  padding: 16px;
+  padding: 18px 20px;
   border-radius: 14px;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
   border-left: 5px solid #3b82f6;
 }
 
-.meaning-picture {
-  width: 96px;
-  height: 96px;
-  min-width: 96px;
-  border-radius: 12px;
-  background: #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-}
-
-.meaning-picture svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.placeholder-icon {
-  font-size: 2.5rem;
-}
-
-.meaning-content {
-  flex: 1;
-}
-
 .meaning-header {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.meaning-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .meaning-header h3 {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   letter-spacing: 0.5px;
+}
+
+.btn-speak {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  cursor: pointer;
 }
 
 .finder-pill {
@@ -452,10 +488,27 @@ input, select {
   color: #c2410c;
 }
 
-.meaning-content p {
-  color: #475569;
-  font-size: 0.94rem;
-  line-height: 1.4;
+.meaning-counterpart {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.meaning-text {
+  color: #334155;
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+.ltr {
+  direction: ltr;
+  text-align: left;
 }
 
 /* WORD PANEL */
@@ -506,6 +559,10 @@ input, select {
   gap: 8px;
 }
 
+.word-list.rtl-list .word-item {
+  direction: rtl;
+}
+
 .word-item {
   display: flex;
   justify-content: space-between;
@@ -514,8 +571,8 @@ input, select {
   background: #f8fafc;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
+  font-size: 0.95rem;
+  letter-spacing: 0.4px;
 }
 
 .word-item.found-1 {
