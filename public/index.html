@@ -11,7 +11,7 @@
   <div id="lobby-screen" class="screen">
     <div class="lobby-card">
       <h1>Word Search Duel</h1>
-      <p class="subtitle">Level 1 • 10×10 Grid • 10 Words</p>
+      <p class="subtitle">Level 1 • 10×10 Grid • 10 Random Words</p>
 
       <div class="form-group">
         <label for="room-code">Room Code</label>
@@ -53,13 +53,18 @@
       </div>
 
       <div class="form-group">
-        <label for="category-select">Category (if creating a new room)</label>
+        <label for="category-select">Category (10 Topics • 20 Words Each)</label>
         <select id="category-select">
-          <option value="Animals">Animals</option>
-          <option value="Countries">Countries</option>
-          <option value="Technology">Technology</option>
-          <option value="Space">Space</option>
-          <option value="Food">Food</option>
+          <option value="Animals">Animals (حیوانات)</option>
+          <option value="Fruits & Food">Fruits & Food (میوه و غذا)</option>
+          <option value="Countries">Countries (کشورها)</option>
+          <option value="Space">Space (فضا)</option>
+          <option value="Nature">Nature (طبیعت)</option>
+          <option value="Colors & Shapes">Colors & Shapes (رنگ و شکل)</option>
+          <option value="Body & Health">Body & Health (بدن)</option>
+          <option value="Home & School">Home & School (خانه و مدرسه)</option>
+          <option value="Jobs & Transport">Jobs & Transport (شغل و سفر)</option>
+          <option value="Technology">Technology (فناوری)</option>
         </select>
       </div>
 
@@ -75,6 +80,16 @@
         <span class="badge">Room: <strong id="display-room"></strong></span>
         <button id="copy-link-btn" type="button" class="btn-small">Copy Invite Link</button>
         <button id="reset-btn" type="button" class="btn-small btn-reset">Reset Game</button>
+
+        <!-- KID-FRIENDLY LANGUAGE TOGGLE SWITCH -->
+        <div class="lang-toggle" title="Switch Table & Meaning Language">
+          <button id="lang-en-btn" type="button" class="lang-opt active">EN Table</button>
+          <button id="lang-fa-btn" type="button" class="lang-opt">جدول فارسی</button>
+        </div>
+
+        <!-- PER-PLAYER VOICE PRONUNCIATION TOGGLE -->
+        <button id="sound-btn" type="button" class="btn-small btn-sound">🔊 Voice: ON</button>
+
         <span id="conn-status" class="conn-badge hidden">Reconnecting...</span>
       </div>
 
@@ -100,11 +115,20 @@
     </header>
 
     <!-- MUTUAL RESET CONFIRMATION BANNER -->
-    <div id="reset-banner" class="reset-banner hidden">
+    <div id="reset-banner" class="confirm-banner hidden">
       <span id="reset-banner-text"></span>
-      <div class="reset-actions">
+      <div class="banner-actions">
         <button id="confirm-reset-btn" type="button" class="btn-confirm">Confirm Reset</button>
         <button id="decline-reset-btn" type="button" class="btn-decline">Decline</button>
+      </div>
+    </div>
+
+    <!-- MUTUAL LANGUAGE CHANGE CONFIRMATION BANNER -->
+    <div id="lang-banner" class="confirm-banner lang-banner hidden">
+      <span id="lang-banner-text"></span>
+      <div class="banner-actions">
+        <button id="confirm-lang-btn" type="button" class="btn-confirm">Confirm Switch</button>
+        <button id="decline-lang-btn" type="button" class="btn-decline">Decline</button>
       </div>
     </div>
 
@@ -122,18 +146,17 @@
           </div>
         </div>
 
-        <!-- WORD PICTURE & MEANING CARD -->
+        <!-- BILINGUAL WORD MEANING CARD (NO PICTURE) -->
         <section id="meaning-card" class="meaning-card">
-          <div id="meaning-picture" class="meaning-picture">
-            <span class="placeholder-icon">📖</span>
-          </div>
-          <div class="meaning-content">
-            <div class="meaning-header">
+          <div class="meaning-header">
+            <div class="meaning-title-group">
               <h3 id="meaning-word">Find a word to learn its meaning!</h3>
-              <span id="meaning-finder" class="finder-pill hidden"></span>
+              <button id="speak-again-btn" type="button" class="btn-speak hidden" title="Hear pronunciation again">🔊 Listen</button>
             </div>
-            <p id="meaning-text">When any player finds a word on the 10×10 board, its picture and definition will appear here.</p>
+            <span id="meaning-finder" class="finder-pill hidden"></span>
           </div>
+          <p id="meaning-counterpart" class="meaning-counterpart hidden"></p>
+          <p id="meaning-text" class="meaning-text">When any player finds a word on the 10×10 board, its meaning will appear here.</p>
         </section>
       </div>
 
@@ -158,11 +181,16 @@
       <div class="form-group">
         <label for="next-category">Next Stage Category</label>
         <select id="next-category">
-          <option value="Animals">Animals</option>
-          <option value="Countries">Countries</option>
-          <option value="Technology">Technology</option>
-          <option value="Space">Space</option>
-          <option value="Food">Food</option>
+          <option value="Animals">Animals (حیوانات)</option>
+          <option value="Fruits & Food">Fruits & Food (میوه و غذا)</option>
+          <option value="Countries">Countries (کشورها)</option>
+          <option value="Space">Space (فضا)</option>
+          <option value="Nature">Nature (طبیعت)</option>
+          <option value="Colors & Shapes">Colors & Shapes (رنگ و شکل)</option>
+          <option value="Body & Health">Body & Health (بدن)</option>
+          <option value="Home & School">Home & School (خانه و مدرسه)</option>
+          <option value="Jobs & Transport">Jobs & Transport (شغل و سفر)</option>
+          <option value="Technology">Technology (فناوری)</option>
         </select>
       </div>
 
