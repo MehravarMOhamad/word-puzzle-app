@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const CATEGORIES = require('./words');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,91 +10,28 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Level configuration (Level 1: 10x10 grid, 10 words)
+// Level configuration (Level 1: 10x10 grid, 10 words randomly chosen from 20)
 const LEVELS = {
   1: { gridSize: 10, wordCount: 10 }
 };
 
-// Word pools per category (4-8 letters each so 10 words fit cleanly in 10x10)
-const CATEGORIES = {
-  Animals: [
-    { word: 'ELEPHANT', meaning: 'The largest land animal, known for its long trunk and big ears.', visual: { type: 'scene', icon: '🐘', bg: '#dcfce7' } },
-    { word: 'GIRAFFE', meaning: 'The tallest land animal, with a very long neck for eating tree leaves.', visual: { type: 'scene', icon: '🦒', bg: '#fef3c7' } },
-    { word: 'PENGUIN', meaning: 'A black-and-white flightless bird that swims skillfully in cold oceans.', visual: { type: 'scene', icon: '🐧', bg: '#e0f2fe' } },
-    { word: 'DOLPHIN', meaning: 'An intelligent ocean mammal known for leaping out of the water.', visual: { type: 'scene', icon: '🐬', bg: '#cffafe' } },
-    { word: 'OCTOPUS', meaning: 'A clever sea creature with a soft body and eight flexible arms.', visual: { type: 'scene', icon: '🐙', bg: '#fce7f3' } },
-    { word: 'CHEETAH', meaning: 'The fastest land animal in the world, famous for its spotted coat.', visual: { type: 'scene', icon: '🐆', bg: '#fef9c3' } },
-    { word: 'TURTLE', meaning: 'A slow-moving reptile protected by a hard, bony shell.', visual: { type: 'scene', icon: '🐢', bg: '#d1fae5' } },
-    { word: 'MONKEY', meaning: 'An agile primate that loves climbing trees and often has a long tail.', visual: { type: 'scene', icon: '🐒', bg: '#ffedd5' } },
-    { word: 'RABBIT', meaning: 'A small furry mammal with long ears and strong back legs for hopping.', visual: { type: 'scene', icon: '🐇', bg: '#f3e8ff' } },
-    { word: 'PARROT', meaning: 'A brightly colored tropical bird that can mimic human speech.', visual: { type: 'scene', icon: '🦜', bg: '#dcfce7' } },
-    { word: 'WHALE', meaning: 'A gigantic ocean mammal that breathes air through a blowhole.', visual: { type: 'scene', icon: '🐋', bg: '#dbeafe' } },
-    { word: 'LION', meaning: 'A powerful big cat often called the king of the jungle.', visual: { type: 'scene', icon: '🦁', bg: '#fef3c7' } }
-  ],
-  Countries: [
-    { word: 'JAPAN', meaning: 'An island nation in East Asia known as the Land of the Rising Sun.', visual: { type: 'flag', code: 'JP' } },
-    { word: 'GERMANY', meaning: 'A Central European country famous for engineering, castles, and forests.', visual: { type: 'flag', code: 'DE' } },
-    { word: 'FRANCE', meaning: 'A Western European nation celebrated for art, cuisine, and the Eiffel Tower.', visual: { type: 'flag', code: 'FR' } },
-    { word: 'ITALY', meaning: 'A Mediterranean country shaped like a boot, famous for Rome and pasta.', visual: { type: 'flag', code: 'IT' } },
-    { word: 'BRAZIL', meaning: 'The largest country in South America, home to the Amazon rainforest.', visual: { type: 'flag', code: 'BR' } },
-    { word: 'CANADA', meaning: 'A vast North American country known for maple leaves and snowy mountains.', visual: { type: 'flag', code: 'CA' } },
-    { word: 'NORWAY', meaning: 'A Nordic country famous for deep coastal fjords and the midnight sun.', visual: { type: 'flag', code: 'NO' } },
-    { word: 'SWEDEN', meaning: 'A Scandinavian nation of thousands of islands, forests, and lakes.', visual: { type: 'flag', code: 'SE' } },
-    { word: 'MEXICO', meaning: 'A vibrant North American country known for ancient ruins and rich cuisine.', visual: { type: 'flag', code: 'MX' } },
-    { word: 'ICELAND', meaning: 'A Nordic island of glaciers, geysers, waterfalls, and volcanoes.', visual: { type: 'flag', code: 'IS' } },
-    { word: 'BELGIUM', meaning: 'A European country famous for waffles, chocolate, and medieval towns.', visual: { type: 'flag', code: 'BE' } },
-    { word: 'POLAND', meaning: 'A Central European country known for historic cities and Baltic beaches.', visual: { type: 'flag', code: 'PL' } }
-  ],
-  Technology: [
-    { word: 'LAPTOP', meaning: 'A portable personal computer with a built-in screen and keyboard.', visual: { type: 'scene', icon: '💻', bg: '#e0e7ff' } },
-    { word: 'SERVER', meaning: 'A powerful computer that stores data and delivers websites to users.', visual: { type: 'scene', icon: '🖥️', bg: '#dbeafe' } },
-    { word: 'DATABASE', meaning: 'An organized digital system for storing and searching large amounts of data.', visual: { type: 'scene', icon: '🗄️', bg: '#e0f2fe' } },
-    { word: 'KEYBOARD', meaning: 'An input device covered in letter and symbol keys for typing text.', visual: { type: 'scene', icon: '⌨️', bg: '#f1f5f9' } },
-    { word: 'BROWSER', meaning: 'A software app used to open and view websites on the internet.', visual: { type: 'scene', icon: '🌐', bg: '#dcfce7' } },
-    { word: 'NETWORK', meaning: 'A group of connected computers that share information with each other.', visual: { type: 'scene', icon: '📡', bg: '#ede9fe' } },
-    { word: 'ROBOT', meaning: 'A programmable machine capable of performing physical tasks automatically.', visual: { type: 'scene', icon: '🤖', bg: '#fae8ff' } },
-    { word: 'CAMERA', meaning: 'A device that captures photographs or records moving video.', visual: { type: 'scene', icon: '📷', bg: '#ffedd5' } },
-    { word: 'BATTERY', meaning: 'A device that stores chemical energy and supplies electrical power.', visual: { type: 'scene', icon: '🔋', bg: '#dcfce7' } },
-    { word: 'PRINTER', meaning: 'A machine that puts digital text and pictures onto sheets of paper.', visual: { type: 'scene', icon: '🖨️', bg: '#f1f5f9' } },
-    { word: 'PHONE', meaning: 'A handheld device used to make calls, send messages, and run apps.', visual: { type: 'scene', icon: '📱', bg: '#dbeafe' } },
-    { word: 'MOUSE', meaning: 'A hand-held device moved across a desk to control the screen cursor.', visual: { type: 'scene', icon: '🖱️', bg: '#fef3c7' } }
-  ],
-  Space: [
-    { word: 'GALAXY', meaning: 'A massive system of billions of stars, gas, and dust held by gravity.', visual: { type: 'scene', icon: '🌌', bg: '#1e1b4b' } },
-    { word: 'PLANET', meaning: 'A large round object in space that orbits around a star.', visual: { type: 'scene', icon: '🪐', bg: '#312e81' } },
-    { word: 'COMET', meaning: 'An icy space object that grows a bright glowing tail near the Sun.', visual: { type: 'scene', icon: '☄️', bg: '#0f172a' } },
-    { word: 'NEBULA', meaning: 'A giant glowing cloud of gas and dust in space where new stars form.', visual: { type: 'scene', icon: '✨', bg: '#3b0764' } },
-    { word: 'ECLIPSE', meaning: 'An event where one space object casts its shadow over another.', visual: { type: 'scene', icon: '🌑', bg: '#1e293b' } },
-    { word: 'GRAVITY', meaning: 'The invisible force that pulls objects with mass toward each other.', visual: { type: 'scene', icon: '🌍', bg: '#172554' } },
-    { word: 'ROCKET', meaning: 'A powerful spacecraft engine-driven vehicle built to launch into space.', visual: { type: 'scene', icon: '🚀', bg: '#1e293b' } },
-    { word: 'METEOR', meaning: 'A streak of light in the night sky made by space rock burning in air.', visual: { type: 'scene', icon: '🌠', bg: '#0f172a' } },
-    { word: 'SATURN', meaning: 'The sixth planet from the Sun, famous for its wide icy rings.', visual: { type: 'scene', icon: '🪐', bg: '#451a03' } },
-    { word: 'SUN', meaning: 'The bright hot star at the center of our solar system.', visual: { type: 'scene', icon: '☀️', bg: '#422006' } },
-    { word: 'ORBIT', meaning: 'The curved path an object follows as it travels around a star or planet.', visual: { type: 'scene', icon: '🛰️', bg: '#0f172a' } },
-    { word: 'MOON', meaning: 'Earth’s natural satellite that shines by reflecting sunlight.', visual: { type: 'scene', icon: '🌕', bg: '#1e293b' } }
-  ],
-  Food: [
-    { word: 'AVOCADO', meaning: 'A creamy green fruit with a large round pit in the center.', visual: { type: 'scene', icon: '🥑', bg: '#dcfce7' } },
-    { word: 'PANCAKE', meaning: 'A flat, round breakfast cake cooked on a pan and served with syrup.', visual: { type: 'scene', icon: '🥞', bg: '#fef3c7' } },
-    { word: 'PRETZEL', meaning: 'A baked bread snack twisted into a knot and sprinkled with salt.', visual: { type: 'scene', icon: '🥨', bg: '#ffedd5' } },
-    { word: 'PIZZA', meaning: 'A baked flatbread topped with tomato sauce, melted cheese, and toppings.', visual: { type: 'scene', icon: '🍕', bg: '#fee2e2' } },
-    { word: 'BANANA', meaning: 'A sweet curved yellow fruit packed with energy and potassium.', visual: { type: 'scene', icon: '🍌', bg: '#fef9c3' } },
-    { word: 'CHEESE', meaning: 'A flavorful dairy food made by pressing and aging milk curds.', visual: { type: 'scene', icon: '🧀', bg: '#fef3c7' } },
-    { word: 'MUFFIN', meaning: 'A small cup-shaped baked cake, often filled with fruit or chocolate.', visual: { type: 'scene', icon: '🧁', bg: '#fce7f3' } },
-    { word: 'NOODLES', meaning: 'Long thin strips of cooked dough served in soup or with sauce.', visual: { type: 'scene', icon: '🍜', bg: '#ffedd5' } },
-    { word: 'CHERRY', meaning: 'A small round bright-red fruit with a hard pit inside.', visual: { type: 'scene', icon: '🍒', bg: '#ffe4e6' } },
-    { word: 'COOKIE', meaning: 'A small flat sweet baked treat, often crisp on the edges and chewy inside.', visual: { type: 'scene', icon: '🍪', bg: '#fef3c7' } },
-    { word: 'BURGER', meaning: 'A cooked patty served inside a sliced round bread bun with toppings.', visual: { type: 'scene', icon: '🍔', bg: '#ffedd5' } },
-    { word: 'DONUT', meaning: 'A sweet ring-shaped fried dough pastry covered in glaze or sprinkles.', visual: { type: 'scene', icon: '🍩', bg: '#fce7f3' } }
-  ]
-};
-
-const DIRECTIONS = [
+// English reads Left-to-Right; Farsi reads Right-to-Left
+const DIRECTIONS_EN = [
   { dr: 0, dc: 1 },
   { dr: 1, dc: 0 },
   { dr: 1, dc: 1 },
   { dr: -1, dc: 1 }
 ];
+
+const DIRECTIONS_FA = [
+  { dr: 0, dc: -1 },
+  { dr: 1, dc: 0 },
+  { dr: 1, dc: -1 },
+  { dr: -1, dc: -1 }
+];
+
+const EN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const FA_ALPHABET = 'ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهیآ';
 
 const rooms = new Map();
 const disconnectTimers = new Map();
@@ -107,13 +45,19 @@ function shuffle(arr) {
   return copy;
 }
 
-function generatePuzzle(category, levelNum = 1) {
+function generatePuzzle(category, levelNum = 1, tableLang = 'en') {
   const { gridSize, wordCount } = LEVELS[levelNum];
   const pool = CATEGORIES[category] || CATEGORIES.Animals;
+  const directions = tableLang === 'fa' ? DIRECTIONS_FA : DIRECTIONS_EN;
+  const alphabet = tableLang === 'fa' ? FA_ALPHABET : EN_ALPHABET;
 
-  for (let boardTry = 0; boardTry < 100; boardTry++) {
+  for (let boardTry = 0; boardTry < 120; boardTry++) {
     const chosenItems = shuffle(pool).slice(0, wordCount);
-    chosenItems.sort((a, b) => b.word.length - a.word.length);
+    chosenItems.sort((a, b) => {
+      const lenA = tableLang === 'fa' ? a.fa.length : a.en.length;
+      const lenB = tableLang === 'fa' ? b.fa.length : b.en.length;
+      return lenB - lenA;
+    });
 
     const grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(''));
     const placedWords = [];
@@ -121,26 +65,26 @@ function generatePuzzle(category, levelNum = 1) {
 
     for (let idx = 0; idx < chosenItems.length; idx++) {
       const item = chosenItems[idx];
-      const word = item.word;
+      const targetWord = tableLang === 'fa' ? item.fa : item.en;
       let placed = false;
 
       for (let attempt = 0; attempt < 400; attempt++) {
-        const dir = DIRECTIONS[(idx + attempt) % DIRECTIONS.length];
+        const dir = directions[(idx + attempt) % directions.length];
         const rStart = Math.floor(Math.random() * gridSize);
         const cStart = Math.floor(Math.random() * gridSize);
 
-        const rEnd = rStart + dir.dr * (word.length - 1);
-        const cEnd = cStart + dir.dc * (word.length - 1);
+        const rEnd = rStart + dir.dr * (targetWord.length - 1);
+        const cEnd = cStart + dir.dc * (targetWord.length - 1);
 
         if (rEnd < 0 || rEnd >= gridSize || cEnd < 0 || cEnd >= gridSize) {
           continue;
         }
 
         let fits = true;
-        for (let i = 0; i < word.length; i++) {
+        for (let i = 0; i < targetWord.length; i++) {
           const r = rStart + dir.dr * i;
           const c = cStart + dir.dc * i;
-          if (grid[r][c] !== '' && grid[r][c] !== word[i]) {
+          if (grid[r][c] !== '' && grid[r][c] !== targetWord[i]) {
             fits = false;
             break;
           }
@@ -148,17 +92,18 @@ function generatePuzzle(category, levelNum = 1) {
 
         if (fits) {
           const cells = [];
-          for (let i = 0; i < word.length; i++) {
+          for (let i = 0; i < targetWord.length; i++) {
             const r = rStart + dir.dr * i;
             const c = cStart + dir.dc * i;
-            grid[r][c] = word[i];
+            grid[r][c] = targetWord[i];
             cells.push({ r, c });
           }
 
+          // When table is English -> show Farsi word & meaning; when table is Farsi -> show English word & meaning
           placedWords.push({
-            word,
-            meaning: item.meaning,
-            visual: item.visual,
+            word: targetWord,
+            counterpart: tableLang === 'fa' ? item.en : item.fa,
+            meaning: tableLang === 'fa' ? item.meaningEn : item.meaningFa,
             cells,
             foundBy: null
           });
@@ -174,7 +119,6 @@ function generatePuzzle(category, levelNum = 1) {
     }
 
     if (allPlaced) {
-      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
           if (grid[r][c] === '') {
@@ -183,7 +127,7 @@ function generatePuzzle(category, levelNum = 1) {
         }
       }
 
-      placedWords.sort((a, b) => a.word.localeCompare(b.word));
+      placedWords.sort((a, b) => a.word.localeCompare(b.word, tableLang === 'fa' ? 'fa' : 'en'));
       return { gridSize, grid, words: placedWords };
     }
   }
@@ -191,7 +135,6 @@ function generatePuzzle(category, levelNum = 1) {
   throw new Error('Could not generate puzzle grid');
 }
 
-// Extract straight line of cells from start to end on the grid
 function extractLine(grid, start, end) {
   const size = grid.length;
   if (
@@ -205,7 +148,6 @@ function extractLine(grid, start, end) {
   const dr = end.r - start.r;
   const dc = end.c - start.c;
 
-  // Must be horizontal, vertical, or 45-degree diagonal
   if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) {
     return null;
   }
@@ -228,12 +170,16 @@ function extractLine(grid, start, end) {
   return { text, cells };
 }
 
-function createRoom(roomCode, category) {
-  const puzzle = generatePuzzle(category, 1);
+function createRoom(roomCode, category, tableLang = 'en') {
+  const lang = tableLang === 'fa' ? 'fa' : 'en';
+  const cat = CATEGORIES[category] ? category : 'Animals';
+  const puzzle = generatePuzzle(cat, 1, lang);
+
   return {
     roomCode,
     level: 1,
-    category,
+    category: cat,
+    tableLang: lang,
     gridSize: puzzle.gridSize,
     grid: puzzle.grid,
     words: puzzle.words,
@@ -241,21 +187,28 @@ function createRoom(roomCode, category) {
     status: 'waiting',
     winner: null,
     lastFound: null,
-    resetVotes: { 1: false, 2: false }
+    foundSeq: 0,
+    resetVotes: { 1: false, 2: false },
+    pendingLang: null,
+    langVotes: { 1: false, 2: false }
   };
 }
 
-function resetRoomPuzzle(room, newCategory) {
+function resetRoomPuzzle(room, newCategory, newLang) {
   const chosenCategory = CATEGORIES[newCategory] ? newCategory : room.category;
-  const puzzle = generatePuzzle(chosenCategory, 1);
+  const chosenLang = newLang === 'fa' || newLang === 'en' ? newLang : room.tableLang;
+  const puzzle = generatePuzzle(chosenCategory, 1, chosenLang);
 
   room.category = chosenCategory;
+  room.tableLang = chosenLang;
   room.gridSize = puzzle.gridSize;
   room.grid = puzzle.grid;
   room.words = puzzle.words;
   room.winner = null;
   room.lastFound = null;
   room.resetVotes = { 1: false, 2: false };
+  room.pendingLang = null;
+  room.langVotes = { 1: false, 2: false };
 
   if (room.players[1]) room.players[1].score = 0;
   if (room.players[2]) room.players[2].score = 0;
@@ -268,14 +221,17 @@ function getPublicRoomState(room) {
     roomCode: room.roomCode,
     level: room.level,
     category: room.category,
+    categories: Object.keys(CATEGORIES),
+    tableLang: room.tableLang,
+    descLang: room.tableLang === 'fa' ? 'en' : 'fa',
     gridSize: room.gridSize,
     grid: room.grid,
     words: room.words.map((w) => ({
       word: w.word,
       foundBy: w.foundBy,
       cells: w.foundBy ? w.cells : [],
-      meaning: w.foundBy ? w.meaning : null,
-      visual: w.foundBy ? w.visual : null
+      counterpart: w.foundBy ? w.counterpart : null,
+      meaning: w.foundBy ? w.meaning : null
     })),
     players: {
       1: room.players[1]
@@ -288,7 +244,9 @@ function getPublicRoomState(room) {
     status: room.status,
     winner: room.winner,
     lastFound: room.lastFound,
-    resetVotes: room.resetVotes
+    resetVotes: room.resetVotes,
+    pendingLang: room.pendingLang,
+    langVotes: room.langVotes
   };
 }
 
@@ -313,8 +271,8 @@ io.on('connection', (socket) => {
 
     let room = rooms.get(code);
     if (!room) {
-      const chosenCategory = CATEGORIES[category] ? category : 'Animals';
-      room = createRoom(code, chosenCategory);
+      // Default table language is English ('en'), default description language is Farsi ('fa')
+      room = createRoom(code, category, 'en');
       rooms.set(code, room);
     }
 
@@ -348,7 +306,6 @@ io.on('connection', (socket) => {
     io.to(code).emit('roomState', getPublicRoomState(room));
   });
 
-  // Auto-rejoin after brief connection drops without losing score or slot
   socket.on('rejoinRoom', ({ roomCode, slot, token }) => {
     const code = (roomCode || '').trim().toUpperCase();
     const playerSlot = Number(slot);
@@ -390,7 +347,6 @@ io.on('connection', (socket) => {
     const matched = room.words.find((w) => w.foundBy === null && w.word === line.text);
 
     if (!matched) {
-      // Helpful hint if player dragged from last letter to first letter
       const reversed = line.text.split('').reverse().join('');
       const backwardsMatch = room.words.find((w) => w.foundBy === null && w.word === reversed);
       if (backwardsMatch) {
@@ -404,10 +360,12 @@ io.on('connection', (socket) => {
     matched.foundBy = slot;
     matched.cells = line.cells;
     room.players[slot].score += 1;
+    room.foundSeq += 1;
     room.lastFound = {
+      seq: room.foundSeq,
       word: matched.word,
+      counterpart: matched.counterpart,
       meaning: matched.meaning,
-      visual: matched.visual,
       foundBy: slot
     };
 
@@ -424,7 +382,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
   });
 
-  // Mutual-confirmation Reset (requires BOTH players to confirm)
+  // Mutual Reset Confirmation
   socket.on('requestReset', () => {
     const { roomCode, slot } = socket.data;
     if (!roomCode || !slot) return;
@@ -433,9 +391,8 @@ io.on('connection', (socket) => {
     if (!room || !room.players[1] || !room.players[2]) return;
 
     room.resetVotes[slot] = true;
-
     if (room.resetVotes[1] && room.resetVotes[2]) {
-      resetRoomPuzzle(room, room.category);
+      resetRoomPuzzle(room, room.category, room.tableLang);
     }
 
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
@@ -452,6 +409,43 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
   });
 
+  // Mutual Language Change Confirmation
+  socket.on('requestLangChange', ({ targetLang }) => {
+    const { roomCode, slot } = socket.data;
+    if (!roomCode || !slot) return;
+
+    const room = rooms.get(roomCode);
+    if (!room || !room.players[1] || !room.players[2]) return;
+
+    const lang = targetLang === 'fa' ? 'fa' : 'en';
+    if (lang === room.tableLang && !room.pendingLang) return;
+
+    if (room.pendingLang !== lang) {
+      room.pendingLang = lang;
+      room.langVotes = { 1: false, 2: false };
+    }
+
+    room.langVotes[slot] = true;
+
+    if (room.langVotes[1] && room.langVotes[2]) {
+      resetRoomPuzzle(room, room.category, room.pendingLang);
+    }
+
+    io.to(roomCode).emit('roomState', getPublicRoomState(room));
+  });
+
+  socket.on('cancelLangChange', () => {
+    const { roomCode } = socket.data;
+    if (!roomCode) return;
+
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.pendingLang = null;
+    room.langVotes = { 1: false, 2: false };
+    io.to(roomCode).emit('roomState', getPublicRoomState(room));
+  });
+
   socket.on('restartGame', ({ category }) => {
     const { roomCode } = socket.data;
     if (!roomCode) return;
@@ -459,7 +453,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    resetRoomPuzzle(room, category);
+    resetRoomPuzzle(room, category, room.tableLang);
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
   });
 
@@ -476,7 +470,6 @@ io.on('connection', (socket) => {
     player.connected = false;
     io.to(roomCode).emit('roomState', getPublicRoomState(room));
 
-    // Wait 60 seconds before removing player so temporary network blips can auto-rejoin
     clearDisconnectTimer(roomCode, slot);
     const timer = setTimeout(() => {
       const currentRoom = rooms.get(roomCode);
@@ -486,6 +479,9 @@ io.on('connection', (socket) => {
       if (p && !p.connected) {
         currentRoom.players[slot] = null;
         currentRoom.resetVotes = { 1: false, 2: false };
+        currentRoom.pendingLang = null;
+        currentRoom.langVotes = { 1: false, 2: false };
+
         if (currentRoom.status === 'playing') {
           currentRoom.status = 'waiting';
         }
